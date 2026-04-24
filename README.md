@@ -53,6 +53,9 @@ The server will be available at `http://localhost:8987/mcp`.
 
 ## 🐳 Docker Support
 
+The Docker image is automatically built and published to GHCR:
+`ghcr.io/danish-mar/juno-mcp:master`
+
 You can run the server using Docker and Docker Compose:
 
 1. **Build and Start**:
