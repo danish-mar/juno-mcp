@@ -51,6 +51,25 @@ npm start
 
 The server will be available at `http://localhost:8987/mcp`.
 
+## 🐳 Docker Support
+
+You can run the server using Docker and Docker Compose:
+
+1. **Build and Start**:
+   ```bash
+   docker-compose up -d --build
+   ```
+
+2. **Check Logs**:
+   ```bash
+   docker logs -f juno-mcp
+   ```
+
+3. **Stop**:
+   ```bash
+   docker-compose down
+   ```
+
 ## 🛠️ Available Tools
 
 | Tool | Description |
