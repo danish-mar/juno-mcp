@@ -1,0 +1,9 @@
+services:
+  juno-mcp:
+    build: .
+    container_name: juno-mcp
+    ports:
+      - "${PORT:-8987}:8987"
+    env_file:
+      - .env
+    restart: unless-stopped
