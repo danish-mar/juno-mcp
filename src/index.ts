@@ -11,9 +11,8 @@ app.use((req, res, next) => {
   next();
 });
 
-const server = buildServer();
-
 app.post("/mcp", async (req, res) => {
+  const server = buildServer();
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
