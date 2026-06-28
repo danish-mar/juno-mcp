@@ -1,14 +1,13 @@
 # Juno ERP MCP Client
 
-A modular Model Context Protocol (MCP) server for interacting with MGMU Juno ERP. This client exposes various student-related data as tools for use with LLMs (like Claude).
+A modular Model Context Protocol (MCP) server for interacting with MGMU Juno ERP. It exposes both **student** (own data) and **employee** (university-wide management) capabilities as tools for use with LLMs (like Claude).
 
 ## 🚀 Features
 
-- **Profile Management**: Fetch student personal information and academic info.
-- **Attendance**: Get detailed attendance records and visual graph data.
-- **Fees & Admission**: Check remaining fees, fee structure, and admission details.
-- **Academics**: Fetch today's schedule, exam results, and course lists for specific terms.
-- **Search**: Search for students within the ERP.
+- **Student tools**: profile, academic info, attendance (+ graph), fees, admission, exam results, schedule, courses, search.
+- **Employee tools**: university-wide search and the full student-management dashboard (personal info, academics, fees, attendance/marks graphs, exams, transfers, hostel, library, placement, grievances, leave, and more) — looked up by `studentId`.
+- **Profile-image proxy**: `search_university` rewrites profile-picture URLs to this server, which streams the **authenticated** image back so the AI panel can render it directly.
+- **Optional proxy**: route ERP traffic through an HTTP/HTTPS/SOCKS proxy, or auto-pick a free one.
 
 ## 🛠️ Setup
 
@@ -17,80 +16,85 @@ A modular Model Context Protocol (MCP) server for interacting with MGMU Juno ERP
    npm install
    ```
 
-2. **Configure Environment**:
-   Copy `.env.example` to `.env` and fill in your credentials:
+2. **Configure Environment**: copy `.env.example` to `.env` and fill it in.
    ```bash
    cp .env.example .env
    ```
-   Edit `.env`:
-   ```env
-   email=your_email@example.com
-   password=your_password
-   PORT=8987
-   ```
+   - **Student account**: `STUDENT_EMAIL` / `STUDENT_PASSWORD` (legacy `email` / `password` still work).
+   - **Employee account**: `EMPLOYEE_EMAIL` / `EMPLOYEE_PASSWORD` — required for the employee tools and the image proxy.
+   - **`PUBLIC_URL`**: the externally reachable base URL of this server (used to build image links). Defaults to `http://localhost:<PORT>`.
+   - **Proxy** (optional): set `PROXY_URL`, or `PROXY_USE_RANDOM=true` to auto-pick a free one. No proxy is used unless configured.
 
-3. **Build the Project**:
+3. **Build**:
    ```bash
    npm run build
    ```
 
 ## 🏃 Running the Server
 
-### Development Mode
-Runs the server using `tsx` for live development:
 ```bash
-npm run dev
+npm run dev            # live development
+# or
+npm run build && npm start
 ```
 
-### Production Mode
-Builds and runs the compiled JavaScript:
-```bash
-npm run build
-npm start
+The MCP endpoint is `http://localhost:8987/mcp`. Health check at `/health`.
+
+## 🖼️ Profile-image proxy
+
+`search_university` returns each hit with its `imageUrl` rewritten to:
+
+```
+<PUBLIC_URL>/img/getStudentProfileImageById.json?id=<id>
+<PUBLIC_URL>/img/getEmployeeProfileImageById.json?id=<id>
 ```
 
-The server will be available at `http://localhost:8987/mcp`.
+Requesting that URL makes the server fetch the image from the ERP using the
+logged-in **employee** session and stream it back, so the AI can display it
+without its own credentials. Only the two known profile-image endpoints are
+proxied (it is not an open proxy).
 
 ## 🐳 Docker Support
 
-The Docker image is automatically built and published to GHCR:
-`ghcr.io/danish-mar/juno-mcp:master`
+The image is published to GHCR: `ghcr.io/danish-mar/juno-mcp:master`.
 
-You can run the server using Docker and Docker Compose:
+```bash
+docker-compose up -d --build
+docker logs -f juno-mcp
+docker-compose down
+```
 
-1. **Build and Start**:
-   ```bash
-   docker-compose up -d --build
-   ```
+This depends on `juno-erp-client@^1.1.0` from npm, so the Docker build's
+`npm install` resolves it from the registry with no extra setup.
 
-2. **Check Logs**:
-   ```bash
-   docker logs -f juno-mcp
-   ```
+## 🧰 Available Tools
 
-3. **Stop**:
-   ```bash
-   docker-compose down
-   ```
+### Student (logged-in student's own data)
 
-## 🛠️ Available Tools
+`get_profile`, `get_academic_info`, `get_admission_details`, `get_remaining_fees`,
+`get_fees_structure`, `get_attendance_details`, `get_attendance_graph`,
+`get_exam_details`, `get_student_results`, `get_today_schedule`,
+`get_courses_for_term`, `search_student`
 
-| Tool | Description |
-|------|-------------|
-| `get_profile` | Fetch profile information for the logged-in student. |
-| `get_academic_info` | Fetch academic information. |
-| `get_attendance_details` | Fetch detailed attendance records. |
-| `get_attendance_graph` | Fetch attendance graph data. |
-| `get_today_schedule` | Fetch today's schedule for a specific date. |
-| `get_student_results` | Fetch exam results (requires IDs). |
-| `get_remaining_fees` | Fetch pending fee details. |
-| `search_student` | Search for students by name. |
+### Employee (staff account)
+
+- `search_university` — search all students/staff; profile images are proxied.
+- Per-student lookups (take a `studentId`): `get_student_personal_information`,
+  `get_student_academic_info`, `get_student_admission_details`,
+  `get_student_fees_details`, `get_student_fee_structure`, `get_student_receivable`,
+  `get_student_attendance_details`, `get_student_attendance_graph`,
+  `get_student_marks_graph`, `get_student_clinical_attendance_analysis`,
+  `get_student_exam_details`, `get_student_transfer_details`,
+  `get_student_transfer_history`, `get_student_event_details`,
+  `get_student_grievances`, `get_student_library_details`,
+  `get_student_placement_details`, `get_student_hostel_details`,
+  `get_student_course_file_details`, `get_student_leave_history`
 
 ## 🔒 Security
 
-- Credentials are never hardcoded and are loaded from `.env`.
-- `.env` is included in `.gitignore` to prevent accidental exposure.
-- Session tokens are managed in-memory and refreshed automatically upon expiry.
+- Credentials are loaded from `.env` (gitignored), never hardcoded.
+- Sessions are kept in memory per role and refreshed automatically on expiry.
+- The image proxy is restricted to the two ERP profile-image endpoints.
 
 ## 📄 License
 
