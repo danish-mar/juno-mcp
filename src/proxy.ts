@@ -10,6 +10,19 @@ const ERP_PROBE_URL = 'https://erp.mgmu.ac.in/login.htm';
 let resolved: ProxyOptions | undefined;
 let resolveDone = false;
 
+/**
+ * Forgets the cached proxy so the next {@link resolveProxy} call re-resolves.
+ * Called after a request fails: a random free proxy may have died, and a fresh
+ * pick should be attempted instead of failing until the process restarts.
+ * No-op effect for explicit/no-proxy modes (re-resolving returns the same thing).
+ */
+export function invalidateProxy(): void {
+  if (config.proxy.useRandom && !config.proxy.url) {
+    resolveDone = false;
+    resolved = undefined;
+  }
+}
+
 /** Fetches a plain `ip:port` list of free proxies from ProxyScrape. */
 async function fetchFreeProxies(protocol: string, country: string, timeoutMs: number): Promise<string[]> {
   const url = `https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies`

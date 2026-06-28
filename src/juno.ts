@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { StudentClient, EmployeeClient, buildProxyAgent } from 'juno-erp-client';
 import { config, type Role } from './config.js';
-import { resolveProxy } from './proxy.js';
+import { resolveProxy, invalidateProxy } from './proxy.js';
 
 type AnyClient = StudentClient | EmployeeClient;
 
@@ -46,9 +46,28 @@ function looksLikeLoginPage(value: unknown): boolean {
   return s.includes('<!DOCTYPE') || s.includes('Unexpected token') || s.includes('not valid JSON');
 }
 
-/** Runs an operation against a freshly-restored client, refreshing the session on login-page detection. */
+/**
+ * A transport-level failure (dead/slow proxy, connection drop) rather than a
+ * session-expiry. A cached random free proxy that has died surfaces here.
+ */
+function looksLikeNetworkError(error: any): boolean {
+  const code = String(error?.code ?? '');
+  if (['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNABORTED', 'EPROTO'].includes(code)) {
+    return true;
+  }
+  const msg = String(error?.message ?? '').toLowerCase();
+  return msg.includes('socket hang up') || msg.includes('tunneling socket') ||
+    msg.includes('timeout') || msg.includes('network') || msg.includes('proxy');
+}
+
+/**
+ * Runs an operation against a freshly-restored client. Retries on session
+ * expiry (re-login) and on transport failures (drop the cached proxy so a fresh
+ * one is picked) — so a dead free proxy self-heals without a container restart.
+ */
 async function withClient<T>(role: Role, operation: (client: any) => Promise<T>): Promise<T> {
   let attempts = 0;
+  let lastError: unknown;
   while (attempts < 3) {
     try {
       const client = await getClient(role);
@@ -60,6 +79,14 @@ async function withClient<T>(role: Role, operation: (client: any) => Promise<T>)
       }
       return result;
     } catch (error: any) {
+      lastError = error;
+      if (looksLikeNetworkError(error)) {
+        console.error(`[${role}] transport error (${error?.code ?? error?.message}); rotating proxy (attempt ${attempts + 1})`);
+        invalidateProxy();
+        sessions[role] = null; // force a fresh login through the new proxy
+        attempts++;
+        continue;
+      }
       if (looksLikeLoginPage(error)) {
         console.error(`[${role}] login redirect detected, refreshing session (attempt ${attempts + 1})`);
         await refreshSession(role);
@@ -69,7 +96,9 @@ async function withClient<T>(role: Role, operation: (client: any) => Promise<T>)
       throw error;
     }
   }
-  throw new Error(`Operation failed after refreshing the ${role} session multiple times`);
+  throw new Error(
+    `Operation failed after ${attempts} attempts for the ${role} session: ${(lastError as Error)?.message ?? lastError}`
+  );
 }
 
 /** Type-safe wrappers so tool callbacks get the right client type. */
